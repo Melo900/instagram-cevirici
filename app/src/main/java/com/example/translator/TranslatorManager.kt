@@ -37,15 +37,11 @@ class TranslatorManager(private val context: Context) {
 
     fun downloadSpecificLanguage(langCode: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
         val model = TranslateRemoteModel.Builder(langCode).build()
-        
-        // DİKKAT: Wi-Fi zorunluluğunu kaldırıp Mobil Veri ile de indirmeyi açtık!
         val conditions = DownloadConditions.Builder().build()
 
-        // 1. Doğrudan Model İndiriciyi Tetikle
         modelManager.download(model, conditions)
             .addOnSuccessListener { onSuccess() }
             .addOnFailureListener {
-                // 2. İlk deneme başarısız olursa Translator istemcisi üzerinden zorla indir
                 val tempOptions = TranslatorOptions.Builder()
                     .setSourceLanguage(langCode)
                     .setTargetLanguage(TranslateLanguage.TURKISH)
