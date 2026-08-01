@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
     private val REQUEST_CODE_AUDIO = 102
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate()
+        super.onCreate(savedInstanceState)
 
         val button = Button(this).apply {
             text = "Çeviri Servisini Başlat"
@@ -56,7 +56,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun startTranslatorService() {
         val intent = Intent(this, OverlayService::class.java)
-        startService(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
         Toast.makeText(this, "Çevirici Başlatıldı!", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CODE_AUDIO) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startTranslatorService()
+            } else {
+                Toast.makeText(this, "Mikrofon izni gerekli!", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }
