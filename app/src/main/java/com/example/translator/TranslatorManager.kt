@@ -13,28 +13,45 @@ class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
     private val modelManager = RemoteModelManager.getInstance()
-    private val turkishModel = TranslateRemoteModel.Builder(TranslateLanguage.TURKISH).build()
 
-    init {
+    // Desteklenen Popüler Dil Kodları Listesi
+    val supportedLanguages = mapOf(
+        "Türkçe" to TranslateLanguage.TURKISH,
+        "İngilizce" to TranslateLanguage.ENGLISH,
+        "İspanyolca" to TranslateLanguage.SPANISH,
+        "Almanca" to TranslateLanguage.GERMAN,
+        "Fransızca" to TranslateLanguage.FRENCH,
+        "İtalyanca" to TranslateLanguage.ITALIAN,
+        "Rusça" to TranslateLanguage.RUSSIAN,
+        "Japonca" to TranslateLanguage.JAPANESE,
+        "Çince" to TranslateLanguage.CHINESE,
+        "Arapça" to TranslateLanguage.ARABIC,
+        "Korece" to TranslateLanguage.KOREAN
+    )
+
+    fun setupTranslator(sourceLangCode: String, targetLangCode: String) {
+        translator?.close()
         val options = TranslatorOptions.Builder()
-            .setSourceLanguage(TranslateLanguage.ENGLISH)
-            .setTargetLanguage(TranslateLanguage.TURKISH)
+            .setSourceLanguage(sourceLangCode)
+            .setTargetLanguage(targetLangCode)
             .build()
         translator = Translation.getClient(options)
     }
 
-    fun downloadModelExplicitly(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        // Wi-Fi veya hücresel veri fark etmeksizin indirmesini sağlıyoruz
+    fun downloadSpecificLanguage(langCode: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val model = TranslateRemoteModel.Builder(langCode).build()
         val conditions = DownloadConditions.Builder().build()
-        
-        modelManager.download(turkishModel, conditions)
+
+        modelManager.download(model, conditions)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener {
-                // Alternatif fallback indirme yöntemi
-                translator?.downloadModelIfNeeded(conditions)
-                    ?.addOnSuccessListener { onSuccess() }
-                    ?.addOnFailureListener { e -> onFailure(e) }
-            }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun isModelDownloaded(langCode: String, onResult: (Boolean) -> Unit) {
+        val model = TranslateRemoteModel.Builder(langCode).build()
+        modelManager.isModelDownloaded(model)
+            .addOnSuccessListener { isDownloaded -> onResult(isDownloaded) }
+            .addOnFailureListener { onResult(false) }
     }
 
     fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
