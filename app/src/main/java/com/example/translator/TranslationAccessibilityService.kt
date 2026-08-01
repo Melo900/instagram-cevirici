@@ -9,35 +9,31 @@ class TranslationAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // Sadece Instagram uygulamasındaki ekran değişikliklerini dinle
+        // Sadece Instagram açıkken çalışır
         if (event.packageName == "com.instagram.android") {
             val rootNode = rootInActiveWindow ?: return
-            findAndTranslateSubtitles(rootNode)
+            findSubtitleAndTranslate(rootNode)
         }
     }
 
-    private fun findAndTranslateSubtitles(node: AccessibilityNodeInfo) {
-        // Ekrandaki tüm metin öğelerini tara
+    private fun findSubtitleAndTranslate(node: AccessibilityNodeInfo) {
+        // Ekrandaki metin düğümlerini tara
         if (node.text != null && node.text.isNotEmpty()) {
             val text = node.text.toString()
-            
-            // Eğer yakalanan metin altyazı niteliğindeyse OverlayService'e gönder
-            if (text.length > 3) {
-                OverlayService.instance?.translateAndShow(text)
+            // Eğer metin altyazı niteliği taşıyorsa OverlayService'e gönder
+            if (text.length > 5) { 
+                OverlayService.updateSubtitleText(text)
             }
         }
 
-        // Alt düğümleri (child nodes) özyinelemeli (recursive) olarak tara
         for (i in 0 until node.childCount) {
             val child = node.getChild(i)
             if (child != null) {
-                findAndTranslateSubtitles(child)
+                findSubtitleAndTranslate(child)
                 child.recycle()
             }
         }
     }
 
-    override fun onInterrupt() {
-        // Servis kesintiye uğradığında çalışır
-    }
+    override fun onInterrupt() {}
 }
