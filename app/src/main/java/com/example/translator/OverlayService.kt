@@ -1,5 +1,8 @@
 package com.example.translator
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.graphics.Color
@@ -13,6 +16,7 @@ import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
 import java.util.Locale
 
 class OverlayService : Service() {
@@ -25,6 +29,8 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        startForegroundServiceWithNotification()
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         translatorManager = TranslatorManager(this)
@@ -41,6 +47,27 @@ class OverlayService : Service() {
                 overlayTextView?.text = "Dil modeli indirilemedi."
             }
         )
+    }
+
+    private fun startForegroundServiceWithNotification() {
+        val channelId = "translator_service_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Canlı Altyazı Servisi",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
+        }
+
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Instagram Canlı Çeviri")
+            .setContentText("Ses dinleniyor ve çevriliyor...")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .build()
+
+        startForeground(1, notification)
     }
 
     private fun setupOverlayView() {
@@ -88,11 +115,11 @@ class OverlayService : Service() {
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
-                    startListening() // Sürekli dinleme döngüsü
+                    startListening()
                 }
 
                 override fun onError(error: Int) {
-                    startListening() // Hata alsa da dinlemeye devam et
+                    startListening()
                 }
 
                 override fun onResults(results: Bundle?) {
