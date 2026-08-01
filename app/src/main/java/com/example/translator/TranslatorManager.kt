@@ -2,14 +2,18 @@ package com.example.translator
 
 import android.content.Context
 import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.common.model.RemoteModelManager
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
-import com.google.mlkit.nl.translate.TranslateLanguage
 
 class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
+    private val modelManager = RemoteModelManager.getInstance()
+    private val turkishModel = TranslateRemoteModel.Builder(TranslateLanguage.TURKISH).build()
 
     init {
         val options = TranslatorOptions.Builder()
@@ -19,17 +23,12 @@ class TranslatorManager(private val context: Context) {
         translator = Translation.getClient(options)
     }
 
-    fun downloadModelIfNeeded(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        // Wi-Fi zorunluluğunu kaldırıyoruz, her türlü bağlantıda indirsin
+    fun downloadModelExplicitly(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
         val conditions = DownloadConditions.Builder().build()
-
-        translator?.downloadModelIfNeeded(conditions)
-            ?.addOnSuccessListener {
-                onSuccess()
-            }
-            ?.addOnFailureListener { e ->
-                onFailure(e)
-            }
+        
+        modelManager.download(turkishModel, conditions)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e) }
     }
 
     fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
