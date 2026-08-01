@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedTextSize = 18f
     private var selectedTextColor = "#FFFFFF"
     private var selectedBgColor = "#CC000000"
-    private var selectedRadius = 24f
+    private var selectedRadius = 28f
 
     private lateinit var previewText: TextView
 
@@ -38,27 +38,42 @@ class MainActivity : AppCompatActivity() {
 
         val scrollView = ScrollView(this).apply {
             isFillViewport = true
-            setBackgroundColor(Color.parseColor("#121212")) // Dark Mode Teması
+            setBackgroundColor(Color.parseColor("#0F0F12")) // Premium Ultra Dark Background
         }
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
+            setPadding(52, 60, 52, 60)
         }
 
-        // Başlık
+        // --- BÖLÜM 1: ÜST BAŞLIK & ROLES ---
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 40)
+        }
+
         val titleText = TextView(this).apply {
             text = "Instagram Altyazı Stüdyosu"
-            textSize = 24f
+            textSize = 26f
             setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 32)
+            setPadding(0, 0, 0, 8)
         }
 
-        // CANLI ÖNİZLEME KARTI
+        val subTitleText = TextView(this).apply {
+            text = "Görünümü özelleştirin ve canlı medya çevirisini başlatın"
+            textSize = 13f
+            setTextColor(Color.parseColor("#8E8E93"))
+        }
+
+        headerLayout.addView(titleText)
+        headerLayout.addView(subTitleText)
+
+        // --- BÖLÜM 2: CANLI ÖNİZLEME KARTI (Glassmorphism Effect) ---
         val previewCard = CardView(this).apply {
-            radius = 32f
-            setCardBackgroundColor(Color.parseColor("#1E1E1E"))
-            setContentPadding(40, 40, 40, 40)
+            radius = 36f
+            setCardBackgroundColor(Color.parseColor("#1C1C1E"))
+            cardElevation = 12f
+            setContentPadding(48, 48, 48, 48)
         }
 
         val previewContainer = LinearLayout(this).apply {
@@ -67,31 +82,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         val previewLabel = TextView(this).apply {
-            text = "CANLI ALTYAZI ÖNİZLEMESİ"
-            textSize = 12f
-            setTextColor(Color.GRAY)
-            setPadding(0, 0, 0, 20)
+            text = "✨ CANLI ÖNİZLEME"
+            textSize = 11f
+            setTextColor(Color.parseColor("#0A84FF"))
+            setPadding(0, 0, 0, 24)
         }
 
         previewText = TextView(this).apply {
-            text = "Örnek altyazı metni bu şekilde görünecek."
-            setPadding(36, 20, 36, 20)
+            text = "Tebrikler! Altyazınız canlı olarak burada görünecek."
+            setPadding(42, 24, 42, 24)
+            gravity = Gravity.CENTER
         }
 
         previewContainer.addView(previewLabel)
         previewContainer.addView(previewText)
         previewCard.addView(previewContainer)
 
-        // AYARLAR PANELİ
+        // --- BÖLÜM 3: ÖZELLEŞTİRME PANELİ ---
         val settingsCard = CardView(this).apply {
-            radius = 32f
-            setCardBackgroundColor(Color.parseColor("#1E1E1E"))
-            setContentPadding(40, 40, 40, 40)
+            radius = 36f
+            setCardBackgroundColor(Color.parseColor("#1C1C1E"))
+            cardElevation = 8f
+            setContentPadding(48, 48, 48, 48)
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            params.setMargins(0, 32, 0, 32)
+            params.setMargins(0, 40, 0, 40)
             layoutParams = params
         }
 
@@ -101,11 +118,14 @@ class MainActivity : AppCompatActivity() {
 
         // 1. Yazı Boyutu Slider
         val sizeLabel = TextView(this).apply {
-            text = "Yazı Boyutu"
+            text = "Yazı Boyutu (Font Size)"
+            textSize = 14f
             setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, 16)
         }
+
         val sizeSeekBar = SeekBar(this).apply {
-            max = 20
+            max = 16
             progress = 4 // Default 18sp
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -117,18 +137,31 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        // 2. Renk Seçenekleri
+        // 2. Metin Rengi Paleti
         val colorLabel = TextView(this).apply {
-            text = "Yazı Rengi"
+            text = "Metin Rengi"
+            textSize = 14f
             setTextColor(Color.WHITE)
-            setPadding(0, 24, 0, 12)
+            setPadding(0, 32, 0, 16)
         }
-        val colorLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
 
-        val colors = listOf("#FFFFFF" to "Beyaz", "#FFD700" to "Sarı", "#00FFFF" to "Turkuaz")
+        val colorLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val colors = listOf(
+            "#FFFFFF" to "Beyaz",
+            "#FFD60A" to "Altın Sarı",
+            "#30D158" to "Neon Yeşil",
+            "#64D2FF" to "Buz Mavi"
+        )
+
         colors.forEach { (hex, name) ->
             val btn = Button(this).apply {
                 text = name
+                textSize = 11f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2C2C2E"))
+                val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                params.setMargins(6, 0, 6, 0)
+                layoutParams = params
                 setOnClickListener {
                     selectedTextColor = hex
                     updatePreview()
@@ -139,15 +172,29 @@ class MainActivity : AppCompatActivity() {
 
         // 3. Arka Plan Şeffaflığı
         val bgLabel = TextView(this).apply {
-            text = "Arka Plan Şeffaflığı"
+            text = "Arka Plan Şeffaflığı & Teması"
+            textSize = 14f
             setTextColor(Color.WHITE)
-            setPadding(0, 24, 0, 12)
+            setPadding(0, 32, 0, 16)
         }
+
         val bgLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val bgOptions = listOf("#CC000000" to "Koyu", "#80000000" to "Yarı Şeffaf", "#FF000000" to "Siyah")
+        val bgOptions = listOf(
+            "#E6000000" to "%90 Koyu",
+            "#99000000" to "%60 Şeffaf",
+            "#4D000000" to "%30 Cam",
+            "#FF000000" to "Opak Siyah"
+        )
+
         bgOptions.forEach { (hex, name) ->
             val btn = Button(this).apply {
                 text = name
+                textSize = 11f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2C2C2E"))
+                val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                params.setMargins(6, 0, 6, 0)
+                layoutParams = params
                 setOnClickListener {
                     selectedBgColor = hex
                     updatePreview()
@@ -164,17 +211,17 @@ class MainActivity : AppCompatActivity() {
         settingsLayout.addView(bgLayout)
         settingsCard.addView(settingsLayout)
 
-        // BAŞLAT BUTONU
+        // --- BÖLÜM 4: BAŞLATMA BUTONU ---
         val btnStart = Button(this).apply {
-            text = "ÇEVİRİ SERVİSİNİ BAŞLAT"
-            textSize = 16f
+            text = "🚀  ÇEVİRİ SERVİSİNİ BAŞLAT"
+            textSize = 15f
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#6200EE"))
-            setPadding(0, 32, 0, 32)
+            setBackgroundColor(Color.parseColor("#0A84FF")) // iOS Accent Blue
+            setPadding(0, 36, 0, 36)
             setOnClickListener { checkPermissionsAndStart() }
         }
 
-        mainLayout.addView(titleText)
+        mainLayout.addView(headerLayout)
         mainLayout.addView(previewCard)
         mainLayout.addView(settingsCard)
         mainLayout.addView(btnStart)
@@ -233,6 +280,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(intent)
         }
-        Toast.makeText(this, "Çevirici Başlatıldı!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Çeviri Servisi Aktif!", Toast.LENGTH_SHORT).show()
     }
 }
