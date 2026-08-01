@@ -1,25 +1,36 @@
 package com.example.translator
 
-import com.google.mlkit.nl.translate.TranslateLanguage
+import android.content.Context
 import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
+import com.google.mlkit.nl.translate.TranslateLanguage
 
-class TranslatorManager {
+class TranslatorManager(private val context: Context) {
 
-    private val options = TranslatorOptions.Builder()
-        .setSourceLanguage(TranslateLanguage.ENGLISH)
-        .setTargetLanguage(TranslateLanguage.TURKISH)
-        .build()
+    private var translator: Translator? = null
 
-    private val englishTurkishTranslator = Translation.getClient(options)
+    init {
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(TranslateLanguage.TURKISH)
+            .build()
+        translator = Translation.getClient(options)
+    }
 
-    fun translate(text: String, onResult: (String) -> Unit) {
-        englishTurkishTranslator.translate(text)
-            .addOnSuccessListener { translatedText ->
-                onResult(translatedText)
-            }
-            .addOnFailureListener {
-                onResult("Çeviri Hatası")
-            }
+    fun downloadModelIfNeeded(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        translator?.downloadModelIfNeeded()
+            ?.addOnSuccessListener { onSuccess() }
+            ?.addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
+        translator?.translate(text)
+            ?.addOnSuccessListener { translatedText -> onSuccess(translatedText) }
+            ?.addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun close() {
+        translator?.close()
     }
 }
