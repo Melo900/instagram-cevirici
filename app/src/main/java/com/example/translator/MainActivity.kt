@@ -4,13 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Gravity
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -61,7 +59,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val subTitleText = TextView(this).apply {
-            text = "Anlık ekran/iç ses paylaşımı ve canlı altyazı"
+            text = "1. Dil paketlerini yükleyin\n2. Ekran & İç ses izni verip başlatın"
             textSize = 13f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 0, 0, 32)
@@ -100,30 +98,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnDownload = Button(this).apply {
-            text = "📥 DİL PAKETLERİNİ İNDİR"
+            text = "📥 DİL PAKETLERİNİ İNDİR / KONTROL ET"
             textSize = 12f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#32D74B"))
             setOnClickListener { downloadLanguages() }
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            params.setMargins(0, 24, 0, 0)
+            layoutParams = params
         }
 
         statusTextView = TextView(this).apply {
-            text = "Durum: Hazır"
+            text = "Durum: Paketler bekleniyor..."
             textSize = 12f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 16, 0, 0)
         }
 
-        langLayout.addView(TextView(this).apply { text = "Kaynak Dil:"; setTextColor(Color.WHITE) })
+        langLayout.addView(TextView(this).apply { text = "Kaynak Dil (Videonun Dili):"; setTextColor(Color.WHITE) })
         langLayout.addView(sourceSpinner)
-        langLayout.addView(TextView(this).apply { text = "Hedef Dil:"; setTextColor(Color.WHITE); setPadding(0, 16, 0, 0) })
+        langLayout.addView(TextView(this).apply { text = "Hedef Dil (Çeviri Dili):"; setTextColor(Color.WHITE); setPadding(0, 16, 0, 0) })
         langLayout.addView(targetSpinner)
         langLayout.addView(btnDownload)
         langLayout.addView(statusTextView)
         langCard.addView(langLayout)
 
         val btnStart = Button(this).apply {
-            text = "🚀 CANLI ÇEVİRİYİ BAŞLAT"
+            text = "🚀 EKRAN PAYLAŞIMI VE ÇEVİRİYİ BAŞLAT"
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#0A84FF"))
@@ -147,15 +151,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadLanguages() {
-        statusTextView.text = "Paketler İndiriliyor..."
+        statusTextView.text = "Google Dil Paketleri İndiriliyor..."
         statusTextView.setTextColor(Color.parseColor("#FF9500"))
 
         translatorManager.downloadSpecificLanguage(selectedSourceLang, onSuccess = {
             translatorManager.downloadSpecificLanguage(selectedTargetLang, onSuccess = {
                 statusTextView.text = "✅ Dil Paketleri Hazır!"
                 statusTextView.setTextColor(Color.parseColor("#30D158"))
-            }, onFailure = { statusTextView.text = "❌ Hedef İndirilemedi" })
-        }, onFailure = { statusTextView.text = "❌ Kaynak İndirilemedi" })
+                Toast.makeText(this, "Paketler hazır!", Toast.LENGTH_SHORT).show()
+            }, onFailure = {
+                statusTextView.text = "❌ Hedef Dil İndirilemedi"
+                statusTextView.setTextColor(Color.parseColor("#FF3B30"))
+            })
+        }, onFailure = {
+            statusTextView.text = "❌ Kaynak Dil İndirilemedi"
+            statusTextView.setTextColor(Color.parseColor("#FF3B30"))
+        })
     }
 
     private fun checkOverlayAndRequestProjection() {
@@ -165,7 +176,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Ekran Paylaşımı & İç Ses Yakalama İznini Tetikle
         val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE_MEDIA_PROJECTION)
     }
@@ -186,7 +196,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 startService(serviceIntent)
             }
-            Toast.makeText(this, "Çeviri Servisi Başlatıldı!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Çeviri Servisi Aktif!", Toast.LENGTH_SHORT).show()
         }
     }
 }
