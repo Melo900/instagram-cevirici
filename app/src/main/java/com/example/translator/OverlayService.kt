@@ -1,5 +1,6 @@
 package com.example.translator
 
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -12,6 +13,8 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -35,10 +38,10 @@ class OverlayService : Service() {
     private var translatorManager: TranslatorManager? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
+    private var mediaProjection: MediaProjection? = null
     private var audioManager: AudioManager? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isListening = false
 
     private var initialX = 0
     private var initialY = 0
@@ -57,6 +60,7 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val projectionData = intent?.getParcelableExtra<Intent>("PROJECTION_DATA")
         val sourceLang = intent?.getStringExtra("SOURCE_LANG") ?: TranslateLanguage.ENGLISH
         val targetLang = intent?.getStringExtra("TARGET_LANG") ?: TranslateLanguage.TURKISH
         val textSize = intent?.getFloatExtra("TEXT_SIZE", 18f) ?: 18f
@@ -64,6 +68,11 @@ class OverlayService : Service() {
         val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#CC000000"
 
         translatorManager?.setupTranslator(sourceLang, targetLang)
+
+        if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
+        }
 
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor(bgColorHex))
@@ -142,7 +151,6 @@ class OverlayService : Service() {
 
             if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
 
-            // Instagram sesinin kısılmasını önleyen AudioFocus pas geçme
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
@@ -166,7 +174,7 @@ class OverlayService : Service() {
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { isListening = true }
+                override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
@@ -196,11 +204,10 @@ class OverlayService : Service() {
     }
 
     private fun scheduleRestart() {
-        isListening = false
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.postDelayed({
             startFreshSpeechRecognizer()
-        }, 100)
+        }, 120)
     }
 
     private fun translateAndShow(rawSpeechText: String) {
@@ -225,7 +232,7 @@ class OverlayService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Instagram Canlı Çevirici")
-            .setContentText("Altyazı akışı aktif...")
+            .setContentText("Ekran iç ses canlı altyazısı aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
@@ -235,6 +242,7 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
+        mediaProjection?.stop()
         try { speechRecognizer?.destroy() } catch (e: Exception) {}
         if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
         translatorManager?.close()
