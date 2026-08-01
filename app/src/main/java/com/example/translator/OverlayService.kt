@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -14,6 +15,8 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -27,6 +30,11 @@ class OverlayService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
 
+    private var initialX = 0
+    private var initialY = 0
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+
     override fun onCreate() {
         super.onCreate()
         startForegroundServiceWithNotification()
@@ -35,30 +43,33 @@ class OverlayService : Service() {
         translatorManager = TranslatorManager(this)
 
         setupOverlayView()
-        initSpeechRecognizer()
+        initMediaSpeechRecognizer()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // MainActivity'den gelen özelleştirme ayarlarını al
-        val textSize = intent?.getFloatExtra("TEXT_SIZE", 16f) ?: 16f
+        val textSize = intent?.getFloatExtra("TEXT_SIZE", 18f) ?: 18f
         val textColorHex = intent?.getStringExtra("TEXT_COLOR") ?: "#FFFFFF"
-        val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#E6000000"
+        val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#CC000000"
+        val cornerRadius = intent?.getFloatExtra("CORNER_RADIUS", 24f) ?: 24f
+
+        val backgroundDrawable = GradientDrawable().apply {
+            setColor(Color.parseColor(bgColorHex))
+            setCornerRadius(cornerRadius)
+        }
 
         overlayTextView?.apply {
             setTextSize(textSize)
             setTextColor(Color.parseColor(textColorHex))
-            setBackgroundColor(Color.parseColor(bgColorHex))
+            background = backgroundDrawable
         }
 
-        // Dil paketini güvenli indir
-        overlayTextView?.text = "Dil Modeli Kontrol Ediliyor..."
         translatorManager?.downloadModelExplicitly(
             onSuccess = {
-                overlayTextView?.text = "Model Hazır! Dinleniyor..."
+                overlayTextView?.text = "Medya Sesi Dinleniyor..."
                 startListening()
             },
-            onFailure = { e ->
-                overlayTextView?.text = "İndirme Hatası. Tekrar Deneyin."
+            onFailure = {
+                overlayTextView?.text = "Dil Modeli Yüklenemedi!"
             }
         )
 
@@ -67,8 +78,9 @@ class OverlayService : Service() {
 
     private fun setupOverlayView() {
         overlayTextView = TextView(this).apply {
-            text = "Başlatılıyor..."
-            setPadding(32, 20, 32, 20)
+            text = "Çevirici Başlatılıyor..."
+            setPadding(40, 24, 40, 24)
+            elevation = 10f
         }
 
         val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -86,19 +98,40 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 150
+            y = 180
+        }
+
+        // Sürükleyip İstediğin Yere Taşıma (Drag & Drop)
+        overlayTextView?.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - initialTouchX).toInt()
+                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    windowManager?.updateViewLayout(view, params)
+                    true
+                }
+                else -> false
+            }
         }
 
         windowManager?.addView(overlayTextView, params)
     }
 
-    private fun initSpeechRecognizer() {
+    private fun initMediaSpeechRecognizer() {
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra("android.speech.extra.DICTATION_MODE", true)
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -148,8 +181,8 @@ class OverlayService : Service() {
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Instagram Canlı Çeviri")
-            .setContentText("Servis Aktif")
+            .setContentTitle("Instagram Canlı Medya Çevirici")
+            .setContentText("Cihaz içi medya sesi anlık işleniyor...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
