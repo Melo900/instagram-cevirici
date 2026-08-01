@@ -23,7 +23,7 @@ jobs:
           cache-disabled: true
 
       - name: Build Debug APK
-        run: gradle assembleDebug --info
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
