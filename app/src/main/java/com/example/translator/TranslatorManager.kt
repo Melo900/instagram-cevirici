@@ -13,7 +13,7 @@ class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
     private val modelManager = RemoteModelManager.getInstance()
-    private var lastTranslatedText = ""
+    private var lastText = ""
 
     val supportedLanguages = mapOf(
         "Türkçe" to TranslateLanguage.TURKISH,
@@ -27,44 +27,52 @@ class TranslatorManager(private val context: Context) {
     )
 
     fun setupTranslator(sourceLangCode: String, targetLangCode: String) {
-        translator?.close()
-        val options = TranslatorOptions.Builder()
-            .setSourceLanguage(sourceLangCode)
-            .setTargetLanguage(targetLangCode)
-            .build()
-        translator = Translation.getClient(options)
+        try {
+            translator?.close()
+            val options = TranslatorOptions.Builder()
+                .setSourceLanguage(sourceLangCode)
+                .setTargetLanguage(targetLangCode)
+                .build()
+            translator = Translation.getClient(options)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun downloadSpecificLanguage(langCode: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        val model = TranslateRemoteModel.Builder(langCode).build()
-        val conditions = DownloadConditions.Builder().build()
+        try {
+            val model = TranslateRemoteModel.Builder(langCode).build()
+            val conditions = DownloadConditions.Builder().build()
 
-        modelManager.download(model, conditions)
-            .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener {
-                val tempOptions = TranslatorOptions.Builder()
-                    .setSourceLanguage(langCode)
-                    .setTargetLanguage(TranslateLanguage.TURKISH)
-                    .build()
-                val tempTranslator = Translation.getClient(tempOptions)
-                
-                tempTranslator.downloadModelIfNeeded(conditions)
-                    .addOnSuccessListener {
-                        tempTranslator.close()
-                        onSuccess()
-                    }
-                    .addOnFailureListener { e ->
-                        tempTranslator.close()
-                        onFailure(e)
-                    }
-            }
+            modelManager.download(model, conditions)
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener {
+                    val tempOptions = TranslatorOptions.Builder()
+                        .setSourceLanguage(langCode)
+                        .setTargetLanguage(TranslateLanguage.TURKISH)
+                        .build()
+                    val tempTranslator = Translation.getClient(tempOptions)
+                    
+                    tempTranslator.downloadModelIfNeeded(conditions)
+                        .addOnSuccessListener {
+                            tempTranslator.close()
+                            onSuccess()
+                        }
+                        .addOnFailureListener { e ->
+                            tempTranslator.close()
+                            onFailure(e)
+                        }
+                }
+        } catch (e: Exception) {
+            onFailure(e)
+        }
     }
 
     fun translateSmartConversation(rawSpeechText: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
         val cleanedText = cleanSpeechArtifacts(rawSpeechText)
-        if (cleanedText.isEmpty() || cleanedText == lastTranslatedText) return
+        if (cleanedText.isEmpty() || cleanedText == lastText) return
 
-        lastTranslatedText = cleanedText
+        lastText = cleanedText
 
         translator?.translate(cleanedText)
             ?.addOnSuccessListener { translatedText ->
@@ -80,6 +88,8 @@ class TranslatorManager(private val context: Context) {
     }
 
     fun close() {
-        translator?.close()
+        try {
+            translator?.close()
+        } catch (e: Exception) {}
     }
 }
