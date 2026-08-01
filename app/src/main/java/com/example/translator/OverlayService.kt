@@ -10,9 +10,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -39,6 +36,12 @@ class OverlayService : Service() {
     private var recognizerIntent: Intent? = null
 
     private var mediaProjection: MediaProjection? = null
+
+    // Sürükleme Hareket Değişkenleri
+    private var initialX = 0
+    private var initialY = 0
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +78,7 @@ class OverlayService : Service() {
 
         translatorManager?.downloadModelExplicitly(
             onSuccess = {
-                overlayTextView?.text = "Medya Sesi Dinleniyor..."
+                overlayTextView?.text = "Dinleniyor..."
                 initInternalAudioSpeechRecognizer()
             },
             onFailure = {
@@ -108,13 +111,27 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            gravity = Gravity.TOP or Gravity.START
+            x = 100
             y = 180
         }
 
+        // --- TAM KONTROLLÜ SÜRÜKLE BIRAK (DRAG & DROP) MANTIĞI ---
         overlayTextView?.setOnTouchListener { view, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> true
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - initialTouchX).toInt()
+                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    windowManager?.updateViewLayout(view, params)
+                    true
+                }
                 else -> false
             }
         }
@@ -184,7 +201,7 @@ class OverlayService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Instagram İç Ses Çevirici")
-            .setContentText("Doğrudan medya sesi anlık işleniyor...")
+            .setContentText("Altyazı balonu taşınabilir durumda aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
