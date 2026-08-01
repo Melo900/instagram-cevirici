@@ -24,11 +24,17 @@ class TranslatorManager(private val context: Context) {
     }
 
     fun downloadModelExplicitly(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        // Wi-Fi veya hücresel veri fark etmeksizin indirmesini sağlıyoruz
         val conditions = DownloadConditions.Builder().build()
         
         modelManager.download(turkishModel, conditions)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { e -> onFailure(e) }
+            .addOnFailureListener {
+                // Alternatif fallback indirme yöntemi
+                translator?.downloadModelIfNeeded(conditions)
+                    ?.addOnSuccessListener { onSuccess() }
+                    ?.addOnFailureListener { e -> onFailure(e) }
+            }
     }
 
     fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
