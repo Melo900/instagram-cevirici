@@ -5,17 +5,23 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
-import android.widget.Toast
+import java.util.Locale
 
 class OverlayService : Service() {
 
     private var windowManager: WindowManager? = null
     private var overlayTextView: TextView? = null
     private var translatorManager: TranslatorManager? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var recognizerIntent: Intent? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -23,12 +29,27 @@ class OverlayService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         translatorManager = TranslatorManager(this)
 
+        setupOverlayView()
+        initSpeechRecognizer()
+
+        translatorManager?.downloadModelIfNeeded(
+            onSuccess = {
+                overlayTextView?.text = "Ses dinleniyor..."
+                startListening()
+            },
+            onFailure = {
+                overlayTextView?.text = "Dil modeli indirilemedi."
+            }
+        )
+    }
+
+    private fun setupOverlayView() {
         overlayTextView = TextView(this).apply {
-            text = "Dil Modeli Yükleniyor..."
+            text = "Başlatılıyor..."
             textSize = 16f
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#CC000000"))
-            setPadding(32, 16, 32, 16)
+            setBackgroundColor(Color.parseColor("#E6000000"))
+            setPadding(32, 20, 32, 20)
         }
 
         val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -50,34 +71,69 @@ class OverlayService : Service() {
         }
 
         windowManager?.addView(overlayTextView, params)
-
-        // Dil modelini indir ve hazır olunca test çevirisi yap
-        translatorManager?.downloadModelIfNeeded(
-            onSuccess = {
-                overlayTextView?.text = "Model Hazır! Test Ediliyor..."
-                testTranslation()
-            },
-            onFailure = { e ->
-                overlayTextView?.text = "Model İndirilemedi!"
-                Toast.makeText(this, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        )
     }
 
-    private fun testTranslation() {
+    private fun initSpeechRecognizer() {
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            }
+
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    startListening() // Sürekli dinleme döngüsü
+                }
+
+                override fun onError(error: Int) {
+                    startListening() // Hata alsa da dinlemeye devam et
+                }
+
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        translateAndShow(matches[0])
+                    }
+                    startListening()
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        translateAndShow(matches[0])
+                    }
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
+    }
+
+    private fun startListening() {
+        speechRecognizer?.startListening(recognizerIntent)
+    }
+
+    private fun translateAndShow(englishText: String) {
         translatorManager?.translate(
-            text = "Hello, this is a live caption test.",
+            text = englishText,
             onSuccess = { translatedText ->
                 overlayTextView?.text = translatedText
             },
             onFailure = {
-                overlayTextView?.text = "Çeviri hatası!"
+                overlayTextView?.text = englishText
             }
         )
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        speechRecognizer?.destroy()
         if (overlayTextView != null) {
             windowManager?.removeView(overlayTextView)
         }
