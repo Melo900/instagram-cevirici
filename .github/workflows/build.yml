@@ -19,7 +19,7 @@ jobs:
       - name: Build Debug APK
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: assembleDebug
+          arguments: assembleDebug --warning-mode=none
           gradle-version: 8.1.1
 
       - name: Upload APK Artifact
@@ -27,3 +27,4 @@ jobs:
         with:
           name: insta-turkce-altyazi-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          
