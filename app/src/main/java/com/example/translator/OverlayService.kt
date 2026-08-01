@@ -4,10 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -31,9 +35,10 @@ class OverlayService : Service() {
     private var translatorManager: TranslatorManager? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
+    private var audioManager: AudioManager? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isRecognizerActive = false
+    private var isListening = false
 
     private var initialX = 0
     private var initialY = 0
@@ -45,6 +50,7 @@ class OverlayService : Service() {
         startForegroundServiceWithNotification()
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         translatorManager = TranslatorManager(this)
 
         setupOverlayView()
@@ -128,7 +134,6 @@ class OverlayService : Service() {
         windowManager?.addView(overlayTextView, params)
     }
 
-    // Takılmayı önlemek için SpeechRecognizer'ı her döngüde yenileyen güvenli başlatıcı
     private fun startFreshSpeechRecognizer() {
         mainHandler.post {
             try {
@@ -136,6 +141,21 @@ class OverlayService : Service() {
             } catch (e: Exception) {}
 
             if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
+
+            // Instagram sesinin kısılmasını önleyen AudioFocus pas geçme
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAcceptsDelayedFocusGain(false)
+                    .setWillPauseWhenDucked(false)
+                    .build()
+                audioManager?.abandonAudioFocusRequest(focusRequest)
+            }
 
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -146,33 +166,22 @@ class OverlayService : Service() {
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    isRecognizerActive = true
-                }
+                override fun onReadyForSpeech(params: Bundle?) { isListening = true }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {
-                    scheduleRestart()
-                }
-
-                override fun onError(error: Int) {
-                    scheduleRestart()
-                }
+                override fun onEndOfSpeech() { scheduleRestart() }
+                override fun onError(error: Int) { scheduleRestart() }
 
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        translateAndShow(matches[0])
-                    }
+                    if (!matches.isNullOrEmpty()) { translateAndShow(matches[0]) }
                     scheduleRestart()
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        translateAndShow(matches[0])
-                    }
+                    if (!matches.isNullOrEmpty()) { translateAndShow(matches[0]) }
                 }
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -187,7 +196,7 @@ class OverlayService : Service() {
     }
 
     private fun scheduleRestart() {
-        isRecognizerActive = false
+        isListening = false
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.postDelayed({
             startFreshSpeechRecognizer()
@@ -226,9 +235,7 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
-        try {
-            speechRecognizer?.destroy()
-        } catch (e: Exception) {}
+        try { speechRecognizer?.destroy() } catch (e: Exception) {}
         if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
         translatorManager?.close()
     }
