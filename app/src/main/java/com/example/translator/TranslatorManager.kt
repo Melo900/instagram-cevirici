@@ -13,8 +13,11 @@ class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
     private val modelManager = RemoteModelManager.getInstance()
+    
+    // Konuşma bağlamını korumak için dinamik hafıza tamponu (Context Buffer)
+    private val conversationBuffer = ArrayList<String>()
+    private val MAX_BUFFER_SIZE = 3
 
-    // Desteklenen Popüler Dil Kodları Listesi
     val supportedLanguages = mapOf(
         "Türkçe" to TranslateLanguage.TURKISH,
         "İngilizce" to TranslateLanguage.ENGLISH,
@@ -23,10 +26,7 @@ class TranslatorManager(private val context: Context) {
         "Fransızca" to TranslateLanguage.FRENCH,
         "İtalyanca" to TranslateLanguage.ITALIAN,
         "Rusça" to TranslateLanguage.RUSSIAN,
-        "Japonca" to TranslateLanguage.JAPANESE,
-        "Çince" to TranslateLanguage.CHINESE,
-        "Arapça" to TranslateLanguage.ARABIC,
-        "Korece" to TranslateLanguage.KOREAN
+        "Japonca" to TranslateLanguage.JAPANESE
     )
 
     fun setupTranslator(sourceLangCode: String, targetLangCode: String) {
@@ -47,20 +47,38 @@ class TranslatorManager(private val context: Context) {
             .addOnFailureListener { e -> onFailure(e) }
     }
 
-    fun isModelDownloaded(langCode: String, onResult: (Boolean) -> Unit) {
-        val model = TranslateRemoteModel.Builder(langCode).build()
-        modelManager.isModelDownloaded(model)
-            .addOnSuccessListener { isDownloaded -> onResult(isDownloaded) }
-            .addOnFailureListener { onResult(false) }
+    /**
+     * Akıllı Konuşma Çevirisi:
+     * Metni parazitlerden arındırır, geçmiş bağlamla birleştirip akıcı Türkçe cümle üretir.
+     */
+    fun translateSmartConversation(rawSpeechText: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
+        val cleanedText = cleanSpeechArtifacts(rawSpeechText)
+        if (cleanedText.isEmpty()) return
+
+        if (conversationBuffer.size >= MAX_BUFFER_SIZE) {
+            conversationBuffer.removeAt(0)
+        }
+        conversationBuffer.add(cleanedText)
+
+        val contextualFullText = conversationBuffer.joinToString(". ")
+
+        translator?.translate(contextualFullText)
+            ?.addOnSuccessListener { translatedText ->
+                val sentences = translatedText.split(".")
+                val latestSentenceTranslation = sentences.lastOrNull { it.isNotBlank() } ?: translatedText
+                onSuccess(latestSentenceTranslation.trim())
+            }
+            ?.addOnFailureListener { e -> onFailure(e) }
     }
 
-    fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
-        translator?.translate(text)
-            ?.addOnSuccessListener { translatedText -> onSuccess(translatedText) }
-            ?.addOnFailureListener { e -> onFailure(e) }
+    private fun cleanSpeechArtifacts(text: String): String {
+        return text.replace(Regex("(?i)\\b(uh|um|hmm|err|like|you know)\\b"), "")
+            .replace("\\s+".toRegex(), " ")
+            .trim()
     }
 
     fun close() {
         translator?.close()
+        conversationBuffer.clear()
     }
 }
