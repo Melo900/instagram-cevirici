@@ -30,10 +30,6 @@ class MainActivity : AppCompatActivity() {
     private var selectedSourceLang = TranslateLanguage.ENGLISH
     private var selectedTargetLang = TranslateLanguage.TURKISH
 
-    private var selectedTextSize = 18f
-    private var selectedTextColor = "#FFFFFF"
-    private var selectedBgColor = "#CC000000"
-
     private lateinit var statusTextView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +55,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val subTitleText = TextView(this).apply {
-            text = "1. Dil paketlerini yükleyin\n2. Ekran & İç ses izni verip başlatın"
+            text = "1. Dil paketlerini indirin\n2. Ekran & Ses paylaşımını başlatın"
             textSize = 13f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 0, 0, 32)
@@ -77,7 +73,7 @@ class MainActivity : AppCompatActivity() {
 
         val sourceSpinner = Spinner(this).apply {
             this.adapter = adapter
-            setSelection(1) // İngilizce
+            setSelection(1)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p0: AdapterView<*>?, p1: android.view.View?, pos: Int, p3: Long) {
                     selectedSourceLang = translatorManager.supportedLanguages[langList[pos]] ?: TranslateLanguage.ENGLISH
@@ -88,7 +84,7 @@ class MainActivity : AppCompatActivity() {
 
         val targetSpinner = Spinner(this).apply {
             this.adapter = adapter
-            setSelection(0) // Türkçe
+            setSelection(0)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p0: AdapterView<*>?, p1: android.view.View?, pos: Int, p3: Long) {
                     selectedTargetLang = translatorManager.supportedLanguages[langList[pos]] ?: TranslateLanguage.TURKISH
@@ -98,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnDownload = Button(this).apply {
-            text = "📥 DİL PAKETLERİNİ İNDİR / KONTROL ET"
+            text = "📥 DİL PAKETLERİNİ İNDİR"
             textSize = 12f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#32D74B"))
@@ -112,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         statusTextView = TextView(this).apply {
-            text = "Durum: Paketler bekleniyor..."
+            text = "Durum: Paket bekleniyor..."
             textSize = 12f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 16, 0, 0)
@@ -151,14 +147,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadLanguages() {
-        statusTextView.text = "Google Dil Paketleri İndiriliyor..."
+        statusTextView.text = "İndiriliyor..."
         statusTextView.setTextColor(Color.parseColor("#FF9500"))
 
         translatorManager.downloadSpecificLanguage(selectedSourceLang, onSuccess = {
             translatorManager.downloadSpecificLanguage(selectedTargetLang, onSuccess = {
                 statusTextView.text = "✅ Dil Paketleri Hazır!"
                 statusTextView.setTextColor(Color.parseColor("#30D158"))
-                Toast.makeText(this, "Paketler hazır!", Toast.LENGTH_SHORT).show()
             }, onFailure = {
                 statusTextView.text = "❌ Hedef Dil İndirilemedi"
                 statusTextView.setTextColor(Color.parseColor("#FF3B30"))
@@ -187,16 +182,13 @@ class MainActivity : AppCompatActivity() {
                 putExtra("PROJECTION_DATA", data)
                 putExtra("SOURCE_LANG", selectedSourceLang)
                 putExtra("TARGET_LANG", selectedTargetLang)
-                putExtra("TEXT_SIZE", selectedTextSize)
-                putExtra("TEXT_COLOR", selectedTextColor)
-                putExtra("BG_COLOR", selectedBgColor)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
                 startService(serviceIntent)
             }
-            Toast.makeText(this, "Çeviri Servisi Aktif!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Çevirici Başlatıldı!", Toast.LENGTH_SHORT).show()
         }
     }
 }
