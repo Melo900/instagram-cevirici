@@ -1,12 +1,10 @@
 package com.example.translator
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,7 +13,6 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -26,7 +23,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private val REQUEST_CODE_OVERLAY = 101
-    private val REQUEST_CODE_MEDIA_PROJECTION = 103
+    private val REQUEST_CODE_AUDIO = 102
 
     private var selectedTextSize = 18f
     private var selectedTextColor = "#FFFFFF"
@@ -48,20 +45,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         val titleText = TextView(this).apply {
-            text = "Instagram Canlı İç Ses Çevirici"
+            text = "Instagram Altyazı Stüdyosu"
             textSize = 24f
             setTextColor(Color.WHITE)
             setPadding(0, 0, 0, 8)
         }
 
         val subTitleText = TextView(this).apply {
-            text = "Mikrofonsuz, doğrudan sistem sesinden anlık çeviri yapın."
+            text = "Canlı altyazı balonu için servisi başlatın"
             textSize = 13f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 0, 0, 32)
         }
 
-        // Önizleme Kartı
         val previewCard = CardView(this).apply {
             radius = 36f
             setCardBackgroundColor(Color.parseColor("#1C1C1E"))
@@ -74,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         previewText = TextView(this).apply {
-            text = "Anlık çeviriler burada görünecektir."
+            text = "Tebrikler! Altyazı balonunuz aktif olacak."
             setPadding(36, 20, 36, 20)
             gravity = Gravity.CENTER
         }
@@ -82,14 +78,13 @@ class MainActivity : AppCompatActivity() {
         previewContainer.addView(previewText)
         previewCard.addView(previewContainer)
 
-        // Başlat Butonu
         val btnStart = Button(this).apply {
-            text = "🚀  İÇ SES ÇEVİRİSİNİ BAŞLAT"
+            text = "🚀  ÇEVİRİ SERVİSİNİ BAŞLAT"
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#0A84FF"))
             setPadding(0, 36, 0, 36)
-            setOnClickListener { checkOverlayAndRequestProjection() }
+            setOnClickListener { checkPermissionsAndStart() }
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -121,7 +116,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkOverlayAndRequestProjection() {
+    private fun checkPermissionsAndStart() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -131,26 +126,46 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Medya sesini yakalamak için sistem izni açıyoruz
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE_MEDIA_PROJECTION)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_CODE_AUDIO
+            )
+            return
+        }
+
+        startTranslatorService()
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
-            val serviceIntent = Intent(this, OverlayService::class.java).apply {
-                putExtra("PROJECTION_DATA", data)
-                putExtra("TEXT_SIZE", selectedTextSize)
-                putExtra("TEXT_COLOR", selectedTextColor)
-                putExtra("BG_COLOR", selectedBgColor)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
+    private fun startTranslatorService() {
+        val intent = Intent(this, OverlayService::class.java).apply {
+            putExtra("TEXT_SIZE", selectedTextSize)
+            putExtra("TEXT_COLOR", selectedTextColor)
+            putExtra("BG_COLOR", selectedBgColor)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        Toast.makeText(this, "Çevirici Başlatıldı!", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CODE_AUDIO) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startTranslatorService()
             } else {
-                startService(serviceIntent)
+                Toast.makeText(this, "Mikrofon izni gerekli!", Toast.LENGTH_SHORT).show()
             }
-            Toast.makeText(this, "İç Ses Çevirici Aktif!", Toast.LENGTH_SHORT).show()
         }
     }
 }
