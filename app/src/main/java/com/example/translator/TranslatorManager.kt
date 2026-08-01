@@ -13,9 +13,7 @@ class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
     private val modelManager = RemoteModelManager.getInstance()
-
-    private val conversationBuffer = ArrayList<String>()
-    private val MAX_BUFFER_SIZE = 2
+    private var lastTranslatedText = ""
 
     val supportedLanguages = mapOf(
         "Türkçe" to TranslateLanguage.TURKISH,
@@ -48,21 +46,11 @@ class TranslatorManager(private val context: Context) {
 
     fun translateSmartConversation(rawSpeechText: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
         val cleanedText = cleanSpeechArtifacts(rawSpeechText)
-        if (cleanedText.isEmpty()) return
+        if (cleanedText.isEmpty() || cleanedText == lastTranslatedText) return
 
-        if (conversationBuffer.contains(cleanedText)) {
-            // Aynı metin tekrar gelirse çeviriyi atla, akışı tıkama
-            return
-        }
+        lastTranslatedText = cleanedText
 
-        if (conversationBuffer.size >= MAX_BUFFER_SIZE) {
-            conversationBuffer.removeAt(0)
-        }
-        conversationBuffer.add(cleanedText)
-
-        val contextualFullText = conversationBuffer.joinToString(" ")
-
-        translator?.translate(contextualFullText)
+        translator?.translate(cleanedText)
             ?.addOnSuccessListener { translatedText ->
                 onSuccess(translatedText.trim())
             }
@@ -77,6 +65,5 @@ class TranslatorManager(private val context: Context) {
 
     fun close() {
         translator?.close()
-        conversationBuffer.clear()
     }
 }
