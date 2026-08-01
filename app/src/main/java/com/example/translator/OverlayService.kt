@@ -38,13 +38,15 @@ class OverlayService : Service() {
         setupOverlayView()
         initSpeechRecognizer()
 
+        overlayTextView?.text = "Google Çeviri Modeli İndiriliyor..."
+
         translatorManager?.downloadModelIfNeeded(
             onSuccess = {
-                overlayTextView?.text = "Ses dinleniyor..."
+                overlayTextView?.text = "Model Yüklendi! Dinleniyor..."
                 startListening()
             },
-            onFailure = {
-                overlayTextView?.text = "Dil modeli indirilemedi."
+            onFailure = { e ->
+                overlayTextView?.text = "İndirme Hatası: ${e.localizedMessage}"
             }
         )
     }
@@ -63,7 +65,7 @@ class OverlayService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Instagram Canlı Çeviri")
-            .setContentText("Ses dinleniyor ve çevriliyor...")
+            .setContentText("Google Dil Paketi Kontrol Ediliyor...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
