@@ -73,13 +73,15 @@ class OverlayService : Service() {
             background = backgroundDrawable
         }
 
+        overlayTextView?.text = "Dil Paketi Kontrol Ediliyor..."
+
         translatorManager?.downloadModelExplicitly(
             onSuccess = {
                 overlayTextView?.text = "Dinleniyor..."
                 startListeningLoop()
             },
-            onFailure = {
-                overlayTextView?.text = "Dil Modeli Yüklenemedi!"
+            onFailure = { e ->
+                overlayTextView?.text = "Dil Modeli İndirilemedi!"
             }
         )
 
@@ -115,7 +117,7 @@ class OverlayService : Service() {
             y = 200
         }
 
-        // Sürükleme Mantığı
+        // Sürükle & Bırak (Drag & Drop) Kontrolü
         overlayTextView?.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -182,6 +184,7 @@ class OverlayService : Service() {
     private fun startListeningLoop() {
         if (isListening) return
         try {
+            // Instagram Sesinin Kısılmasını Önleyen Audio Focus İptali
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
@@ -234,7 +237,7 @@ class OverlayService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Instagram Canlı Çeviri")
-            .setContentText("Kesintisiz çeviri aktif...")
+            .setContentText("Kesintisiz altyazı aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
