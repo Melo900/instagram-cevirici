@@ -60,11 +60,12 @@ class OverlayService : Service() {
         val textSize = intent?.getFloatExtra("TEXT_SIZE", 18f) ?: 18f
         val textColorHex = intent?.getStringExtra("TEXT_COLOR") ?: "#FFFFFF"
         val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#CC000000"
-        val cornerRadius = intent?.getFloatExtra("CORNER_RADIUS", 24f) ?: 24f
+        val cornerRadius = intent?.getFloatExtra("CORNER_RADIUS", 28f) ?: 28f
 
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor(bgColorHex))
             setCornerRadius(cornerRadius)
+            setStroke(2, Color.parseColor("#33FFFFFF")) // İnce şık beyaz çerçeve
         }
 
         overlayTextView?.apply {
@@ -79,7 +80,7 @@ class OverlayService : Service() {
                 startListeningLoop()
             },
             onFailure = {
-                overlayTextView?.text = "Dil Modeli Yüklenemedi!"
+                overlayTextView?.text = "Dil Modeli Hatası!"
             }
         )
 
@@ -89,8 +90,9 @@ class OverlayService : Service() {
     private fun setupOverlayView() {
         overlayTextView = TextView(this).apply {
             text = "Çevirici Başlatılıyor..."
-            setPadding(40, 24, 40, 24)
-            elevation = 10f
+            setPadding(48, 28, 48, 28)
+            elevation = 16f
+            gravity = Gravity.CENTER
         }
 
         val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -137,7 +139,6 @@ class OverlayService : Service() {
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             
-            // Çalışan temiz Recognizer Intent
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
@@ -183,7 +184,6 @@ class OverlayService : Service() {
     private fun startListeningLoop() {
         if (isListening) return
         try {
-            // Instagram sesinin kısılmasını engelleyen Audio Focus Bypassing
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
