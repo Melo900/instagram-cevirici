@@ -2,18 +2,18 @@ package com.example.translator
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 
 class OverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
-    private lateinit var overlayView: View
     private lateinit var textViewSubtitle: TextView
 
     companion object {
@@ -21,9 +21,8 @@ class OverlayService : Service() {
 
         fun updateSubtitleText(text: String) {
             instance?.let { service ->
-                // Yakalanan metni Türkçe'ye çevirip ekrana basma mantığı
                 TranslatorManager.translate(text) { translatedText ->
-                    service.textViewSubtitle.post {
+                    Handler(Looper.getMainLooper()).post {
                         service.textViewSubtitle.text = translatedText
                     }
                 }
@@ -36,13 +35,13 @@ class OverlayService : Service() {
         instance = this
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        
-        // Basit bir TextView oluşturup ekrana balon şeklinde çiziyoruz
+
         textViewSubtitle = TextView(this).apply {
-            textSize = 16f
-            setTextColor(android.graphics.Color.WHITE)
-            setBackgroundColor(android.graphics.Color.parseColor("#80000000"))
-            setPadding(16, 16, 16, 16)
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#C8000000")) // Yarı saydam siyah
+            setPadding(24, 16, 24, 16)
+            text = "Altyazı bekleniyor..."
         }
 
         val params = WindowManager.LayoutParams(
@@ -53,7 +52,7 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            y = 100
+            y = 180
         }
 
         windowManager.addView(textViewSubtitle, params)
