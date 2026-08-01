@@ -1,10 +1,11 @@
 package com.example.translator
 
-import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,14 +21,12 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.google.mlkit.nl.translate.TranslateLanguage
 
 class MainActivity : AppCompatActivity() {
 
     private val REQUEST_CODE_OVERLAY = 101
-    private val REQUEST_CODE_AUDIO = 102
+    private val REQUEST_CODE_MEDIA_PROJECTION = 103
 
     private lateinit var translatorManager: TranslatorManager
     private var selectedSourceLang = TranslateLanguage.ENGLISH
@@ -55,14 +54,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         val titleText = TextView(this).apply {
-            text = "Instagram Altyazı Stüdyosu"
+            text = "Instagram Canlı Çevirici"
             textSize = 24f
             setTextColor(Color.WHITE)
             setPadding(0, 0, 0, 8)
         }
 
         val subTitleText = TextView(this).apply {
-            text = "Anlık altyazı ve canlı çeviriyi başlatın"
+            text = "Anlık ekran/iç ses paylaşımı ve canlı altyazı"
             textSize = 13f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 0, 0, 32)
@@ -129,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#0A84FF"))
             setPadding(0, 36, 0, 36)
-            setOnClickListener { checkPermissionsAndStart() }
+            setOnClickListener { checkOverlayAndRequestProjection() }
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -159,34 +158,35 @@ class MainActivity : AppCompatActivity() {
         }, onFailure = { statusTextView.text = "❌ Kaynak İndirilemedi" })
     }
 
-    private fun checkPermissionsAndStart() {
+    private fun checkOverlayAndRequestProjection() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             startActivityForResult(intent, REQUEST_CODE_OVERLAY)
             return
         }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_CODE_AUDIO)
-            return
-        }
-
-        startTranslatorService()
+        // Ekran Paylaşımı & İç Ses Yakalama İznini Tetikle
+        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE_MEDIA_PROJECTION)
     }
 
-    private fun startTranslatorService() {
-        val intent = Intent(this, OverlayService::class.java).apply {
-            putExtra("SOURCE_LANG", selectedSourceLang)
-            putExtra("TARGET_LANG", selectedTargetLang)
-            putExtra("TEXT_SIZE", selectedTextSize)
-            putExtra("TEXT_COLOR", selectedTextColor)
-            putExtra("BG_COLOR", selectedBgColor)
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_MEDIA_PROJECTION && resultCode == Activity.RESULT_OK && data != null) {
+            val serviceIntent = Intent(this, OverlayService::class.java).apply {
+                putExtra("PROJECTION_DATA", data)
+                putExtra("SOURCE_LANG", selectedSourceLang)
+                putExtra("TARGET_LANG", selectedTargetLang)
+                putExtra("TEXT_SIZE", selectedTextSize)
+                putExtra("TEXT_COLOR", selectedTextColor)
+                putExtra("BG_COLOR", selectedBgColor)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            Toast.makeText(this, "Çeviri Servisi Başlatıldı!", Toast.LENGTH_SHORT).show()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-        Toast.makeText(this, "Çeviri Servisi Başlatıldı!", Toast.LENGTH_SHORT).show()
     }
 }
