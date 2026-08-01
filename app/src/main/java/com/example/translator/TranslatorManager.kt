@@ -13,8 +13,7 @@ class TranslatorManager(private val context: Context) {
 
     private var translator: Translator? = null
     private val modelManager = RemoteModelManager.getInstance()
-    
-    // Konuşma bağlamını korumak için dinamik hafıza tamponu (Context Buffer)
+
     private val conversationBuffer = ArrayList<String>()
     private val MAX_BUFFER_SIZE = 3
 
@@ -47,10 +46,6 @@ class TranslatorManager(private val context: Context) {
             .addOnFailureListener { e -> onFailure(e) }
     }
 
-    /**
-     * Akıllı Konuşma Çevirisi:
-     * Metni parazitlerden arındırır, geçmiş bağlamla birleştirip akıcı Türkçe cümle üretir.
-     */
     fun translateSmartConversation(rawSpeechText: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
         val cleanedText = cleanSpeechArtifacts(rawSpeechText)
         if (cleanedText.isEmpty()) return
