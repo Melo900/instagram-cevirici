@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         previewText = TextView(this).apply {
-            text = "Tebrikler! Altyazı balonunuz aktif olacak."
+            text = "Örnek altyazı metni bu şekilde görünecektir."
             setPadding(36, 20, 36, 20)
             gravity = Gravity.CENTER
         }
