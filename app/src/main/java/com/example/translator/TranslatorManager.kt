@@ -1,6 +1,7 @@
 package com.example.translator
 
 import android.content.Context
+import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
@@ -19,9 +20,16 @@ class TranslatorManager(private val context: Context) {
     }
 
     fun downloadModelIfNeeded(onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        translator?.downloadModelIfNeeded()
-            ?.addOnSuccessListener { onSuccess() }
-            ?.addOnFailureListener { e -> onFailure(e) }
+        // Wi-Fi zorunluluğunu kaldırıyoruz, her türlü bağlantıda indirsin
+        val conditions = DownloadConditions.Builder().build()
+
+        translator?.downloadModelIfNeeded(conditions)
+            ?.addOnSuccessListener {
+                onSuccess()
+            }
+            ?.addOnFailureListener { e ->
+                onFailure(e)
+            }
     }
 
     fun translate(text: String, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
