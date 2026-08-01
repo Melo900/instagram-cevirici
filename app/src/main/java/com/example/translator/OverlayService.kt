@@ -92,6 +92,8 @@ class OverlayService : Service() {
             setPadding(48, 28, 48, 28)
             elevation = 16f
             gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#CC000000"))
         }
 
         val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -110,10 +112,10 @@ class OverlayService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 100
-            y = 180
+            y = 200
         }
 
-        // Sürükle Bırak (Drag & Drop) Kontrolü
+        // Sürükleme Mantığı
         overlayTextView?.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -180,7 +182,6 @@ class OverlayService : Service() {
     private fun startListeningLoop() {
         if (isListening) return
         try {
-            // Ses odağını bırakma talimatı (Instagram sesinin kısılmasını önler)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(
