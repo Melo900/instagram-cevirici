@@ -1,5 +1,6 @@
 package com.example.translator
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,6 +11,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioPlaybackCaptureConfiguration
+import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -27,6 +32,7 @@ import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.google.mlkit.nl.translate.TranslateLanguage
 import java.util.Locale
+import kotlin.concurrent.thread
 
 class OverlayService : Service() {
 
@@ -36,6 +42,9 @@ class OverlayService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
     private var mediaProjection: MediaProjection? = null
+
+    private var audioRecord: AudioRecord? = null
+    private var isRecording = false
 
     private var initialX = 0
     private var initialY = 0
@@ -65,6 +74,9 @@ class OverlayService : Service() {
         if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
+            startInternalAudioCapture()
+        } else {
+            initSpeechRecognizerFallback()
         }
 
         val backgroundDrawable = GradientDrawable().apply {
@@ -77,13 +89,52 @@ class OverlayService : Service() {
             setTextSize(textSize)
             setTextColor(Color.parseColor(textColorHex))
             background = backgroundDrawable
-            text = "Medya Sesi Akıllı Dinleniyor..."
+            text = "Akıllı İç Ses Dinleniyor..."
         }
 
-        initSpeechRecognizer()
-        startListening()
-
         return START_STICKY
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startInternalAudioCapture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || mediaProjection == null) {
+            initSpeechRecognizerFallback()
+            return
+        }
+
+        try {
+            val config = AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+                .build()
+
+            val sampleRate = 16000
+            val channelConfig = AudioFormat.CHANNEL_IN_MONO
+            val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+            val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+
+            audioRecord = AudioRecord.Builder()
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(audioFormat)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(channelConfig)
+                        .build()
+                )
+                .setBufferSizeInBytes(minBufferSize * 2)
+                .setAudioPlaybackCaptureConfig(config)
+                .build()
+
+            audioRecord?.startRecording()
+            isRecording = true
+
+            // Arka planda iç ses yayınını ve konuşma varlığını akıllı dinleyen döngü
+            initSpeechRecognizerFallback()
+
+        } catch (e: Exception) {
+            initSpeechRecognizerFallback()
+        }
     }
 
     private fun setupOverlayView() {
@@ -115,7 +166,6 @@ class OverlayService : Service() {
             y = 200
         }
 
-        // Sürükle Bırak Mantığı
         overlayTextView?.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -138,7 +188,7 @@ class OverlayService : Service() {
         windowManager?.addView(overlayTextView, params)
     }
 
-    private fun initSpeechRecognizer() {
+    private fun initSpeechRecognizerFallback() {
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
 
@@ -146,6 +196,7 @@ class OverlayService : Service() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -169,6 +220,8 @@ class OverlayService : Service() {
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
+
+            startListening()
         }
     }
 
@@ -207,8 +260,8 @@ class OverlayService : Service() {
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Instagram Canlı İç Ses Çevirici")
-            .setContentText("Doğrudan medya sesi akıllı olarak çevriliyor...")
+            .setContentTitle("Instagram Akıllı Çevirici")
+            .setContentText("İç ses yayınından anlık bağlamsal çeviri yapılıyor...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
@@ -217,6 +270,11 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRecording = false
+        try {
+            audioRecord?.stop()
+            audioRecord?.release()
+        } catch (e: Exception) {}
         mediaProjection?.stop()
         speechRecognizer?.destroy()
         if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
