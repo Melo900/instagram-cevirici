@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -33,6 +34,7 @@ class OverlayService : Service() {
     private var translatorManager: TranslatorManager? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
+    private var audioManager: AudioManager? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private var isListening = false
@@ -47,10 +49,11 @@ class OverlayService : Service() {
         startForegroundServiceWithNotification()
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         translatorManager = TranslatorManager(this)
 
         setupOverlayView()
-        initNonIntrusiveSpeechRecognizer()
+        initCleanSpeechRecognizer()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,7 +79,7 @@ class OverlayService : Service() {
                 startListeningLoop()
             },
             onFailure = {
-                overlayTextView?.text = "Dil Modeli Hatası!"
+                overlayTextView?.text = "Dil Modeli Yüklenemedi!"
             }
         )
 
@@ -130,17 +133,16 @@ class OverlayService : Service() {
         windowManager?.addView(overlayTextView, params)
     }
 
-    private fun initNonIntrusiveSpeechRecognizer() {
+    private fun initCleanSpeechRecognizer() {
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            
+            // Çalışan temiz Recognizer Intent
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                // Ses odağını istemeden arka planda dinleme sağlama
-                putExtra("android.speech.extra.GET_AUDIO_FORMAT", "audio/AMR")
-                putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 500L)
-                putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 500L)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -151,11 +153,11 @@ class OverlayService : Service() {
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
-                    restartListeningWithDelay()
+                    restartListening()
                 }
 
                 override fun onError(error: Int) {
-                    restartListeningWithDelay()
+                    restartListening()
                 }
 
                 override fun onResults(results: Bundle?) {
@@ -163,7 +165,7 @@ class OverlayService : Service() {
                     if (!matches.isNullOrEmpty()) {
                         translateAndShow(matches[0])
                     }
-                    restartListeningWithDelay()
+                    restartListening()
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
@@ -179,21 +181,35 @@ class OverlayService : Service() {
     }
 
     private fun startListeningLoop() {
+        if (isListening) return
         try {
+            // Instagram sesinin kısılmasını engelleyen Audio Focus Bypassing
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAcceptsDelayedFocusGain(false)
+                    .setWillPauseWhenDucked(false)
+                    .build()
+                audioManager?.abandonAudioFocusRequest(focusRequest)
+            }
+
             speechRecognizer?.startListening(recognizerIntent)
         } catch (e: Exception) {
-            restartListeningWithDelay()
+            restartListening()
         }
     }
 
-    private fun restartListeningWithDelay() {
+    private fun restartListening() {
         isListening = false
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
-            if (!isListening) {
-                startListeningLoop()
-            }
-        }, 300) // 300ms içinde ses odağını bozmadan tekrar dinlemeye geçer
+            startListeningLoop()
+        }, 150)
     }
 
     private fun translateAndShow(englishText: String) {
@@ -219,8 +235,8 @@ class OverlayService : Service() {
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Instagram Kesintisiz Çevirici")
-            .setContentText("Video sesi kısılmadan anlık çeviri yapılıyor...")
+            .setContentTitle("Instagram Canlı Çeviri")
+            .setContentText("Kesintisiz çeviri aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
