@@ -71,14 +71,6 @@ class OverlayService : Service() {
 
         translatorManager?.setupTranslator(sourceLang, targetLang)
 
-        if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
-            startInternalAudioCapture()
-        } else {
-            initSpeechRecognizerFallback()
-        }
-
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor(bgColorHex))
             setCornerRadius(28f)
@@ -89,14 +81,22 @@ class OverlayService : Service() {
             setTextSize(textSize)
             setTextColor(Color.parseColor(textColorHex))
             background = backgroundDrawable
-            text = "Akıllı İç Ses Dinleniyor..."
+            text = "Ses Bekleniyor..."
+        }
+
+        if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
+            startInternalAudioLoop()
+        } else {
+            initSpeechRecognizerFallback()
         }
 
         return START_STICKY
     }
 
     @SuppressLint("MissingPermission")
-    private fun startInternalAudioCapture() {
+    private fun startInternalAudioLoop() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || mediaProjection == null) {
             initSpeechRecognizerFallback()
             return
@@ -106,7 +106,6 @@ class OverlayService : Service() {
             val config = AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
                 .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                 .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
                 .build()
 
             val sampleRate = 16000
@@ -122,15 +121,40 @@ class OverlayService : Service() {
                         .setChannelMask(channelConfig)
                         .build()
                 )
-                .setBufferSizeInBytes(minBufferSize * 2)
+                .setBufferSizeInBytes(minBufferSize * 4)
                 .setAudioPlaybackCaptureConfig(config)
                 .build()
 
             audioRecord?.startRecording()
             isRecording = true
 
-            // Arka planda iç ses yayınını ve konuşma varlığını akıllı dinleyen döngü
+            // Mikrofonu serbest bırakıp konuşmayı iç ses tespitiyle eş zamanlı başlatıyoruz
             initSpeechRecognizerFallback()
+
+            // İç Ses Varlık Kontrolü (VAD)
+            thread {
+                val buffer = ShortArray(minBufferSize)
+                while (isRecording) {
+                    val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (readSize > 0) {
+                        var sum = 0.0
+                        for (i in 0 until readSize) {
+                            sum += buffer[i] * buffer[i]
+                        }
+                        val amplitude = Math.sqrt(sum / readSize)
+                        
+                        // Seste hareketlilik / konuşma algılandığında tetikle
+                        if (amplitude > 500) {
+                            Handler(Looper.getMainLooper()).post {
+                                if (overlayTextView?.text == "Ses Bekleniyor..." || overlayTextView?.text == "Akıllı İç Ses Dinleniyor...") {
+                                    overlayTextView?.text = "Konuşma Algılandı..."
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(100)
+                }
+            }
 
         } catch (e: Exception) {
             initSpeechRecognizerFallback()
@@ -236,7 +260,7 @@ class OverlayService : Service() {
     private fun restartListening() {
         Handler(Looper.getMainLooper()).postDelayed({
             startListening()
-        }, 150)
+        }, 100)
     }
 
     private fun translateAndShow(rawSpeechText: String) {
