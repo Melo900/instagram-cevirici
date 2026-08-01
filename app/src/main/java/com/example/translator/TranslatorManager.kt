@@ -5,22 +5,21 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 
 class TranslatorManager {
+
     private val options = TranslatorOptions.Builder()
         .setSourceLanguage(TranslateLanguage.ENGLISH)
         .setTargetLanguage(TranslateLanguage.TURKISH)
         .build()
 
-    private val translator = Translation.getClient(options)
-
-    fun prepareModel(onSuccess: () -> Unit) {
-        translator.downloadModelIfNeeded()
-            .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { }
-    }
+    private val englishTurkishTranslator = Translation.getClient(options)
 
     fun translate(text: String, onResult: (String) -> Unit) {
-        if (text.isBlank()) return
-        translator.translate(text)
-            .addOnSuccessListener { onResult(it) }
+        englishTurkishTranslator.translate(text)
+            .addOnSuccessListener { translatedText ->
+                onResult(translatedText)
+            }
+            .addOnFailureListener {
+                onResult("Çeviri Hatası")
+            }
     }
 }
