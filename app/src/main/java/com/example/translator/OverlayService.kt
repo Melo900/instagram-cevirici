@@ -29,7 +29,6 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
         startForegroundServiceWithNotification()
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -37,47 +36,38 @@ class OverlayService : Service() {
 
         setupOverlayView()
         initSpeechRecognizer()
+    }
 
-        overlayTextView?.text = "Google Çeviri Modeli İndiriliyor..."
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // MainActivity'den gelen özelleştirme ayarlarını al
+        val textSize = intent?.getFloatExtra("TEXT_SIZE", 16f) ?: 16f
+        val textColorHex = intent?.getStringExtra("TEXT_COLOR") ?: "#FFFFFF"
+        val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#E6000000"
 
-        translatorManager?.downloadModelIfNeeded(
+        overlayTextView?.apply {
+            setTextSize(textSize)
+            setTextColor(Color.parseColor(textColorHex))
+            setBackgroundColor(Color.parseColor(bgColorHex))
+        }
+
+        // Dil paketini güvenli indir
+        overlayTextView?.text = "Dil Modeli Kontrol Ediliyor..."
+        translatorManager?.downloadModelExplicitly(
             onSuccess = {
-                overlayTextView?.text = "Model Yüklendi! Dinleniyor..."
+                overlayTextView?.text = "Model Hazır! Dinleniyor..."
                 startListening()
             },
             onFailure = { e ->
-                overlayTextView?.text = "İndirme Hatası: ${e.localizedMessage}"
+                overlayTextView?.text = "İndirme Hatası. Tekrar Deneyin."
             }
         )
-    }
 
-    private fun startForegroundServiceWithNotification() {
-        val channelId = "translator_service_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Canlı Altyazı Servisi",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
-        }
-
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Instagram Canlı Çeviri")
-            .setContentText("Google Dil Paketi Kontrol Ediliyor...")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .build()
-
-        startForeground(1, notification)
+        return START_STICKY
     }
 
     private fun setupOverlayView() {
         overlayTextView = TextView(this).apply {
             text = "Başlatılıyor..."
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#E6000000"))
             setPadding(32, 20, 32, 20)
         }
 
@@ -116,27 +106,18 @@ class OverlayService : Service() {
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {
-                    startListening()
-                }
-
-                override fun onError(error: Int) {
-                    startListening()
-                }
+                override fun onEndOfSpeech() { startListening() }
+                override fun onError(error: Int) { startListening() }
 
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        translateAndShow(matches[0])
-                    }
+                    if (!matches.isNullOrEmpty()) { translateAndShow(matches[0]) }
                     startListening()
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        translateAndShow(matches[0])
-                    }
+                    if (!matches.isNullOrEmpty()) { translateAndShow(matches[0]) }
                 }
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -151,21 +132,34 @@ class OverlayService : Service() {
     private fun translateAndShow(englishText: String) {
         translatorManager?.translate(
             text = englishText,
-            onSuccess = { translatedText ->
-                overlayTextView?.text = translatedText
-            },
-            onFailure = {
-                overlayTextView?.text = englishText
-            }
+            onSuccess = { translatedText -> overlayTextView?.text = translatedText },
+            onFailure = { overlayTextView?.text = englishText }
         )
+    }
+
+    private fun startForegroundServiceWithNotification() {
+        val channelId = "translator_service_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId, "Canlı Altyazı Servisi", NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
+        }
+
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Instagram Canlı Çeviri")
+            .setContentText("Servis Aktif")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .build()
+
+        startForeground(1, notification)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         speechRecognizer?.destroy()
-        if (overlayTextView != null) {
-            windowManager?.removeView(overlayTextView)
-        }
+        if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
         translatorManager?.close()
     }
 
