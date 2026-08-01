@@ -63,30 +63,19 @@ class OverlayService : Service() {
         val projectionData = intent?.getParcelableExtra<Intent>("PROJECTION_DATA")
         val sourceLang = intent?.getStringExtra("SOURCE_LANG") ?: TranslateLanguage.ENGLISH
         val targetLang = intent?.getStringExtra("TARGET_LANG") ?: TranslateLanguage.TURKISH
-        val textSize = intent?.getFloatExtra("TEXT_SIZE", 18f) ?: 18f
-        val textColorHex = intent?.getStringExtra("TEXT_COLOR") ?: "#FFFFFF"
-        val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#CC000000"
 
         translatorManager?.setupTranslator(sourceLang, targetLang)
 
         if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
+            try {
+                val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
-        val backgroundDrawable = GradientDrawable().apply {
-            setColor(Color.parseColor(bgColorHex))
-            setCornerRadius(28f)
-            setStroke(2, Color.parseColor("#33FFFFFF"))
-        }
-
-        overlayTextView?.apply {
-            setTextSize(textSize)
-            setTextColor(Color.parseColor(textColorHex))
-            background = backgroundDrawable
-            text = "Dinleniyor..."
-        }
-
+        overlayTextView?.text = "Dinleniyor..."
         startFreshSpeechRecognizer()
 
         return START_STICKY
@@ -99,7 +88,13 @@ class OverlayService : Service() {
             elevation = 16f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#CC000000"))
+            
+            val backgroundDrawable = GradientDrawable().apply {
+                setColor(Color.parseColor("#CC000000"))
+                setCornerRadius(28f)
+                setStroke(2, Color.parseColor("#33FFFFFF"))
+            }
+            background = backgroundDrawable
         }
 
         val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -140,7 +135,11 @@ class OverlayService : Service() {
             }
         }
 
-        windowManager?.addView(overlayTextView, params)
+        try {
+            windowManager?.addView(overlayTextView, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun startFreshSpeechRecognizer() {
@@ -232,7 +231,7 @@ class OverlayService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Instagram Canlı Çevirici")
-            .setContentText("Ekran iç ses canlı altyazısı aktif...")
+            .setContentText("Altyazı servisi aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
@@ -242,9 +241,17 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
-        mediaProjection?.stop()
-        try { speechRecognizer?.destroy() } catch (e: Exception) {}
-        if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
+        try {
+            mediaProjection?.stop()
+        } catch (e: Exception) {}
+        try {
+            speechRecognizer?.destroy()
+        } catch (e: Exception) {}
+        if (overlayTextView != null) {
+            try {
+                windowManager?.removeView(overlayTextView)
+            } catch (e: Exception) {}
+        }
         translatorManager?.close()
     }
 
