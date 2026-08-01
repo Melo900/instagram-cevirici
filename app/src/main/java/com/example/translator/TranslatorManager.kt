@@ -15,7 +15,7 @@ class TranslatorManager(private val context: Context) {
     private val modelManager = RemoteModelManager.getInstance()
 
     private val conversationBuffer = ArrayList<String>()
-    private val MAX_BUFFER_SIZE = 3
+    private val MAX_BUFFER_SIZE = 2
 
     val supportedLanguages = mapOf(
         "Türkçe" to TranslateLanguage.TURKISH,
@@ -50,18 +50,21 @@ class TranslatorManager(private val context: Context) {
         val cleanedText = cleanSpeechArtifacts(rawSpeechText)
         if (cleanedText.isEmpty()) return
 
+        if (conversationBuffer.contains(cleanedText)) {
+            // Aynı metin tekrar gelirse çeviriyi atla, akışı tıkama
+            return
+        }
+
         if (conversationBuffer.size >= MAX_BUFFER_SIZE) {
             conversationBuffer.removeAt(0)
         }
         conversationBuffer.add(cleanedText)
 
-        val contextualFullText = conversationBuffer.joinToString(". ")
+        val contextualFullText = conversationBuffer.joinToString(" ")
 
         translator?.translate(contextualFullText)
             ?.addOnSuccessListener { translatedText ->
-                val sentences = translatedText.split(".")
-                val latestSentenceTranslation = sentences.lastOrNull { it.isNotBlank() } ?: translatedText
-                onSuccess(latestSentenceTranslation.trim())
+                onSuccess(translatedText.trim())
             }
             ?.addOnFailureListener { e -> onFailure(e) }
     }
