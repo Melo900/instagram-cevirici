@@ -1,22 +1,13 @@
 package com.example.translator
 
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioPlaybackCaptureConfiguration
-import android.media.AudioRecord
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -40,7 +31,9 @@ class OverlayService : Service() {
     private var translatorManager: TranslatorManager? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
-    private var mediaProjection: MediaProjection? = null
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var isRecognizerActive = false
 
     private var initialX = 0
     private var initialY = 0
@@ -58,7 +51,6 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val projectionData = intent?.getParcelableExtra<Intent>("PROJECTION_DATA")
         val sourceLang = intent?.getStringExtra("SOURCE_LANG") ?: TranslateLanguage.ENGLISH
         val targetLang = intent?.getStringExtra("TARGET_LANG") ?: TranslateLanguage.TURKISH
         val textSize = intent?.getFloatExtra("TEXT_SIZE", 18f) ?: 18f
@@ -66,11 +58,6 @@ class OverlayService : Service() {
         val bgColorHex = intent?.getStringExtra("BG_COLOR") ?: "#CC000000"
 
         translatorManager?.setupTranslator(sourceLang, targetLang)
-
-        if (projectionData != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(Activity.RESULT_OK, projectionData)
-        }
 
         val backgroundDrawable = GradientDrawable().apply {
             setColor(Color.parseColor(bgColorHex))
@@ -85,8 +72,7 @@ class OverlayService : Service() {
             text = "Dinleniyor..."
         }
 
-        initCleanSpeechRecognizer()
-        startListening()
+        startFreshSpeechRecognizer()
 
         return START_STICKY
     }
@@ -120,7 +106,6 @@ class OverlayService : Service() {
             y = 200
         }
 
-        // Balon Taşıma Mantığı (Drag & Drop)
         overlayTextView?.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -143,33 +128,44 @@ class OverlayService : Service() {
         windowManager?.addView(overlayTextView, params)
     }
 
-    private fun initCleanSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+    // Takılmayı önlemek için SpeechRecognizer'ı her döngüde yenileyen güvenli başlatıcı
+    private fun startFreshSpeechRecognizer() {
+        mainHandler.post {
+            try {
+                speechRecognizer?.destroy()
+            } catch (e: Exception) {}
 
+            if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
+
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH.toString())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                // Ses odağının bozulmasını önleyen ekstra parametre
-                putExtra("android.speech.extra.DICTATION_MODE", true)
             }
 
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onReadyForSpeech(params: Bundle?) {
+                    isRecognizerActive = true
+                }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { restartListening() }
-                override fun onError(error: Int) { restartListening() }
+                override fun onEndOfSpeech() {
+                    scheduleRestart()
+                }
+
+                override fun onError(error: Int) {
+                    scheduleRestart()
+                }
 
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         translateAndShow(matches[0])
                     }
-                    restartListening()
+                    scheduleRestart()
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
@@ -181,21 +177,21 @@ class OverlayService : Service() {
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
+
+            try {
+                speechRecognizer?.startListening(recognizerIntent)
+            } catch (e: Exception) {
+                scheduleRestart()
+            }
         }
     }
 
-    private fun startListening() {
-        try {
-            speechRecognizer?.startListening(recognizerIntent)
-        } catch (e: Exception) {
-            restartListening()
-        }
-    }
-
-    private fun restartListening() {
-        Handler(Looper.getMainLooper()).postDelayed({
-            startListening()
-        }, 150)
+    private fun scheduleRestart() {
+        isRecognizerActive = false
+        mainHandler.removeCallbacksAndMessages(null)
+        mainHandler.postDelayed({
+            startFreshSpeechRecognizer()
+        }, 100)
     }
 
     private fun translateAndShow(rawSpeechText: String) {
@@ -213,14 +209,14 @@ class OverlayService : Service() {
     private fun startForegroundServiceWithNotification() {
         val channelId = "translator_service_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "İç Ses Çeviri Servisi", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "Canlı Çeviri Servisi", NotificationManager.IMPORTANCE_LOW)
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Instagram Akıllı Çevirici")
-            .setContentText("Canlı altyazı aktif...")
+            .setContentTitle("Instagram Canlı Çevirici")
+            .setContentText("Altyazı akışı aktif...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
 
@@ -229,8 +225,10 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaProjection?.stop()
-        speechRecognizer?.destroy()
+        mainHandler.removeCallbacksAndMessages(null)
+        try {
+            speechRecognizer?.destroy()
+        } catch (e: Exception) {}
         if (overlayTextView != null) { windowManager?.removeView(overlayTextView) }
         translatorManager?.close()
     }
